@@ -1,0 +1,15 @@
+export const EDUCATOR_PAINS_DOC = `
+# Dores dos Educadores Empreendedores
+
+As principais dores identificadas são:
+
+1.  **Dificuldade de Acesso ao Mercado Educacional e Geração de Clientes:** Os EEs frequentemente não conseguem acessar o mercado educacional de forma eficaz. Eles enfrentam o desafio de prospectar e gerar matrículas para suas atividades, em parte pela falta de uma estrutura comercial ou habilidades de vendas. A Labirintar observa que o custo de aquisição de clientes educadores é alto quando operam isoladamente.
+2.  **Baixa Remuneração e Sentimento de Exploração:** O mercado tradicional paga uma hora-aula muito baixa para esses profissionais. Consequentemente, muitos EEs sentem-se explorados e capturam muito pouco do valor que criam, apesar de seu esforço e paixão. Eles buscam reconhecimento profissional e financeiro que o modelo convencional muitas vezes não oferece.
+3.  **Isolamento e Falta de Poder de Barganha:** Operando de forma autônoma, os EEs são "nós isolados" em uma rede onde as escolas são "grandes e fortes negócios". Isso resulta em relações frágeis e efêmeras com seus contratantes e pouquíssimo poder de barganha. Há também uma competição intrínseca entre os próprios educadores no mercado.
+4.  **Ausência de Autoria e Reconhecimento Pedagógico:** Muitos produtos educacionais são criados sem a participação dos educadores, que acabam sendo vistos como meros reprodutores de material didático. Isso leva à perda de autoria e da autonomia criativa, uma dor significativa para educadores que desejam ser pesquisadores e autores de seus próprios conteúdos. Além disso, a valorização do educador ainda é malvista e há uma desvalorização institucional de seu papel em certos contextos.
+5.  **Falta de Estrutura e Suporte Empresarial/Operacional:** EEs frequentemente carecem de ferramentas tecnológicas e processos automatizados para gerir suas atividades, matrículas e finanças. Eles precisam de suporte para aspectos como formação pedagógica, curadoria de conteúdo, e até mesmo apoio operacional para imprevistos, como a substituição de um educador em caso de falta. O desconhecimento de como "encorpar" seu fazer em um negócio robusto e escalável também é um desafio.
+6.  **Instabilidade Contratual e Riscos Trabalhistas:** A ausência de contratos de longo prazo ou a predominância de vínculos que se assemelham à CLT sem os devidos direitos e benefícios representam uma instabilidade para os EEs. Além disso, a precarização do trabalho docente no cenário neoliberal da educação expõe esses profissionais a riscos trabalhistas caso atuem como PJ sem uma estrutura formal adequada.
+7.  **Baixo Ticket Médio e Altos Custos Operacionais (se operam sozinhos):** Individualmente, os EEs operam com um ticket médio abaixo do mercado e enfrentam altos custos operacionais para manter seus projetos, o que compromete sua margem de lucro.
+
+Essas dores evidenciam a necessidade de uma plataforma como a Labirintar, que busca oferecer acesso qualificado ao mercado, remuneração superior, estrutura de suporte (comercial, pedagógico, tecnológico, financeiro) e a valorização do educador como coautor e sócio minoritário do ecossistema.
+`;

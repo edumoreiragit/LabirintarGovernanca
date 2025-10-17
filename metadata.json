@@ -1,0 +1,6 @@
+{
+  "name": "LABirintar - Pitch Deck Interativo",
+  "description": "An interactive, slide-based pitch deck for LABirintar. The application functions like a presentation, guiding users through the business model, traction, and value proposition for different audiences (investors, schools, educators, partners). It features a powerful AI assistant, Nina, whose knowledge is based on the company's comprehensive 2025 strategic document.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
