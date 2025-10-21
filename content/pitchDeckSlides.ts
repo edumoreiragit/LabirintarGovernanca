@@ -1,7 +1,5 @@
 import React from 'react';
 import { PitchDeckData, Slide } from '../types';
-import { SOFTWARE_IMAGES } from './assets';
-import NetworkGraph from '../components/NetworkGraph';
 
 const ctaSlide: Slide = {
     id: 'cta-final',
@@ -23,7 +21,7 @@ export const PITCH_DECK_DATA: PitchDeckData = {
         {
             id: 'cover',
             layout: 'cover',
-            backgroundImage: 'https://clubesa.github.io/governanca/pitchDeck/image/IMG_0461.jpeg',
+            backgroundImage: 'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_0461.jpeg',
             subtitle: React.createElement('b', null, 'Somos a inteligência em rede por trás da construção da Escola em Tempo Integral.'),
             mainMessage: React.createElement(
                 'div',
@@ -34,7 +32,7 @@ export const PITCH_DECK_DATA: PitchDeckData = {
         {
             id: 'problem',
             layout: 'problem',
-            backgroundImage: 'https://clubesa.github.io/governanca/pitchDeck/image/IMG_4999.gif',
+            backgroundImage: 'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_4999.gif',
             title: React.createElement(React.Fragment, null, 'O Tempo Integral é Lei.', React.createElement('br'), 'A Qualidade é ', React.createElement('span', { className: 'accent-color' }, 'Desafio.')),
             mainMessage: 'A simples extensão da carga horária para 97.3 milhões de alunos, sem uma revolução pedagógica, cria um problema triplo: escolas sobrecarregadas, famílias insatisfeitas e crianças despreparadas para o futuro.',
             stats: [
@@ -179,42 +177,43 @@ export const PITCH_DECK_DATA: PitchDeckData = {
              cards: [
                 { 
                     title: 'Curadoria Pedagógica', 
-                    text: React.createElement('div', { className: 'text-sm text-left' },
-                        React.createElement('strong', { className: 'font-bold text-gray-800 block mb-1' }, 'Nosso jeito de fazer'),
-                        React.createElement('ul', { className: 'list-disc list-inside text-gray-600 mb-3' },
-                            React.createElement('li', null, 'Aula como experiência', React.createElement('p', { className: 'italic text-xs pl-5' }, 'Por que eu quero viver isso?')),
-                            React.createElement('li', null, 'Aprendizado por Projeto', React.createElement('p', { className: 'italic text-xs pl-5' }, 'Onde eu quero chegar?')),
-                            React.createElement('li', null, 'Pesquisa Etnográfica', React.createElement('p', { className: 'italic text-xs pl-5' }, 'Onde podemos inovar?')),
-                        ),
-                        React.createElement('strong', { className: 'font-bold text-gray-800 block mb-1' }, 'Rotina estruturante'),
-                        React.createElement('ul', { className: 'list-disc list-inside text-gray-600 text-xs' },
-                            React.createElement('li', null, 'Intencionalidade'),
-                            React.createElement('li', null, 'Autonomia'),
-                            React.createElement('li', null, 'Presença'),
-                            React.createElement('li', null, 'Problematização/ Aproximação'),
-                            React.createElement('li', null, 'Ação/ Cooperação'),
-                            React.createElement('li', null, 'Contemplação'),
-                            React.createElement('li', null, 'Documentação'),
-                        )
-                    )
+                    text: 'Esse é o nosso jeito de fazer e nossa rotina estruturante.',
+                    carouselImages: [
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5029.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5055.png',
+                    ],
                 },
                 { 
                     title: 'Rede Autogerida', 
-                    text: React.createElement('div', { className: 'flex-grow flex flex-col' },
-                        React.createElement('p', { className: 'mb-2 text-gray-600' }, 'Nossa rede se expande organicamente, conectando talentos e oportunidades. Cada novo nó fortalece o todo, criando um ecossistema vivo e dinâmico.'),
-                        React.createElement(NetworkGraph)
-                    )
+                    text: 'Nossa rede se expande organicamente, conectando talentos e oportunidades. Cada novo nó fortalece o todo, criando um ecossistema vivo e dinâmico.',
+                    action: 'openNetworkGraph'
                 },
                 { 
                     title: 'Plataforma de Gestão', 
                     text: 'Automatizamos matrículas, pagamentos e comunicação, liberando a escola da carga operacional.',
-                    carouselImages: SOFTWARE_IMAGES,
+                    carouselImages: [
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5001.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5002.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5010.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5011.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5012.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5013.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5014.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5035.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5036.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5037.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5038.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5039.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5040.png',
+                        'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_5041.png',
+                    ],
                 },
             ]
         },
         {
             id: 'traction',
             layout: 'traction',
+            backgroundImage: 'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_1981.jpeg',
             title: React.createElement(React.Fragment, null, 'Nascemos no Chão da Escola.', React.createElement('br'), 'E já estamos ', React.createElement('span', { className: 'accent-color' }, 'tracionando.')),
             mainMessage: 'Nosso modelo foi validado no mundo real, gerando receita, impacto pedagógico e a confiança de nossos primeiros parceiros.',
             stats: [
@@ -223,6 +222,16 @@ export const PITCH_DECK_DATA: PitchDeckData = {
                  { value: 32, text: 'Alunos impactados' },
                  { value: 20, prefix: 'R$', suffix: 'Mil+', text: 'em Receita' },
             ],
+            quote: {
+                text: React.createElement('div', { className: 'space-y-1' },
+                    React.createElement('p', null, 'Sou pedagoga - há vinte anos caminho entre salas, risos e descobertas.'),
+                    React.createElement('p', null, 'Na Antropologia da Educação encontrei o olhar que escuta; na Cultura das Infâncias, o sentido de existir como educadora.'),
+                    React.createElement('p', null, 'Já toquei a vida de centenas de crianças e famílias e, junto a uma equipe de vinte educadores, teci trilhas de aprendizagem para mais de duzentas e cinquenta delas.'),
+                    React.createElement('p', null, 'Fui formadora de quem forma, consultora em instituições como o Instituto Alana e a Rede Sagrado Coração, sempre movida pela crença de que educar é também um ato de inovação.'),
+                    React.createElement('p', null, 'Hoje, crio um ecossistema de experiências educativas - um espaço vivo onde Educação, Inovação e Tecnologia se entrelaçam para transformar os caminhos da Escola em Tempo Integral no Brasil.')
+                ),
+                author: "Maria Lívia, Fundadora e CEO da LABirintar"
+            }
         },
         {
             id: 'team',
@@ -247,7 +256,7 @@ export const PITCH_DECK_DATA: PitchDeckData = {
                     description: React.createElement('div', null, 
                         React.createElement('p', { className: 'mb-2 font-semibold' }, 'Estratégia, Sistemas e Captação'),
                         React.createElement('p', { className: 'mb-2' }, 'Administrador e contador, com especialização em Finanças, Sistemas de Informação e certificação em Neurociências.'), 
-                        React.createElement('p', null, 'Atuou no SEBRAE com planos de negócios e viabilidade, desenvolveu sistemas de gestão com metodologias contemporâneas e atua como advisor em redes como Anjos do Brasil e BNI, conectando inovação e captação de recursos.')
+                        React.createElement('p', null, 'Atuou no SEBRAE com planos de negócios, desenvolveu sistemas de gestão com metodologias contemporâneas e atua como advisor em redes como Anjos do Brasil.')
                     )
                 },
                 { 
@@ -260,6 +269,15 @@ export const PITCH_DECK_DATA: PitchDeckData = {
                         React.createElement('p', null, 'Participação ativa no Movimento Empresa Júnior, com atuação em cargos de diretoria e conselho.')
                     )
                 },
+                {
+                    name: 'Bruno Ferrari',
+                    role: 'Gestor Operacional',
+                    photoKey: 'bruno',
+                    description: React.createElement('div', null,
+                        React.createElement('p', { className: 'mb-2 font-semibold' }, 'Desenvolvimento de negócios e Inovação'),
+                        React.createElement('p', { className: 'mb-2' }, 'Experiência em operações comerciais, desenvolvimento de negócios B2B SaaS e startups. Busca constante por aprimoramento em Product Management e UX/UI Design para potencializar produtos digitais orientados ao cliente.')
+                    )
+                }
             ]
         },
         {
@@ -268,10 +286,10 @@ export const PITCH_DECK_DATA: PitchDeckData = {
             title: 'Nosso ecossistema atende ao propósito de cada parceiro.',
             subtitle: 'Quem é você nesta jornada?',
             bifurcationOptions: [
-                { audience: 'investor', icon: 'https://clubesa.github.io/governanca/pitchDeck/image/investidor.jpeg', title: 'Investidor', description: 'Busco o futuro da educação e um modelo de alto impacto.', subtext: 'Descubra nosso Moat' },
-                { audience: 'school', icon: 'https://clubesa.github.io/governanca/pitchDeck/image/escola.jpeg', title: 'Escola', description: 'Quero inovar, gerar receita e encantar famílias.', subtext: 'Resolva sua dor' },
-                { audience: 'educator', icon: 'https://clubesa.github.io/governanca/pitchDeck/image/educador.jpeg', title: 'Educador', description: 'Quero empreender, transformar e ser valorizado.', subtext: 'Seja protagonista' },
-                { audience: 'partner', icon: 'https://clubesa.github.io/governanca/pitchDeck/image/provedor.jpeg', title: 'Provedor', description: 'Acredito no poder das conexões para escalar.', subtext: 'Explore sinergias' },
+                { audience: 'investor', icon: 'https://edumoreiragit.github.io/Imagens/Labirintar/IMG_7642.jpeg', title: 'Investidor', description: 'Busco o futuro da educação e um modelo de alto impacto.', subtext: 'Descubra nosso Moat' },
+                { audience: 'school', icon: 'https://edumoreiragit.github.io/Imagens/Labirintar/dfa38885-520b-4c50-8cf0-ca8eb189ab4a.jpeg', title: 'Escola', description: 'Quero inovar, gerar receita e encantar famílias.', subtext: 'Resolva sua dor' },
+                { audience: 'educator', icon: 'https://edumoreiragit.github.io/Imagens/Labirintar/0e4a432a-eb40-49b0-a108-5513ae996bf7.jpeg', title: 'Educador', description: 'Quero empreender, transformar e ser valorizado.', subtext: 'Seja protagonista' },
+                { audience: 'partner', icon: 'https://edumoreiragit.github.io/Imagens/Labirintar/4c8e94bf-a916-4655-bd44-7c640f9bfc09.jpeg', title: 'Provedor', description: 'Acredito no poder das conexões para escalar.', subtext: 'Explore sinergias' },
             ],
         },
     ],
@@ -307,8 +325,8 @@ export const PITCH_DECK_DATA: PitchDeckData = {
                     text: 'O modelo de rede mantém o Custo de Aquisição (CAC) baixo, pois a própria rede de educadores e escolas gera indicações qualificadas. ',
                     list: [
                         { highlight: '50% Rede', text: 'Atrai e retém os melhores talentos (35% Educador, 15% Parceiro).', colorClass: 'text-[#ffa400]' },
-                        { highlight: '30% LABirintar', text: 'Margem para reinvestir em tecnologia e crescimento.', colorClass: 'text-[#ff595a]' },
-                        { highlight: '20% Escola', text: 'Gera receita passiva e incentiva a parceria.', colorClass: 'text-amber-800' },
+                        { highlight: '30% Escola', text: 'Gera receita passiva e incentiva a parceria.', colorClass: 'text-amber-800' },
+                        { highlight: '20% LABirintar', text: 'Margem para reinvestir em tecnologia e crescimento.', colorClass: 'text-[#ff595a]' },
                         { highlight: 'LTV/CAC > 3x', text: 'Já na fase piloto, demonstramos um retorno sobre o investimento em aquisição de clientes altamente eficiente.', colorClass: 'accent-color' },
                     ],
                 },
@@ -340,9 +358,9 @@ export const PITCH_DECK_DATA: PitchDeckData = {
                     list: [
                         { highlight: '35% Mkt & Vendas', text: 'Estruturação da máquina de vendas.', colorClass: 'text-[#ff595a]' },
                         { highlight: '25% Operação', text: 'Expansão do time de curadoria e suporte.', colorClass: 'text-[#ffa400]' },
-                        { highlight: '20% Tecnologia', text: 'Evolução da plataforma e IA.', colorClass: 'text-amber-800' },
-                        { highlight: '10% Consultorias', text: 'Assessorias estratégicas (Ex: M&A, Jurídico).', colorClass: 'text-gray-500' },
-                        { highlight: '10% Dev. Institucional', text: 'Fortalecimento da governança e conselho.', colorClass: 'text-gray-600' },
+                        { highlight: '20% Tecnologia', text: 'Evolução da plataforma e IA.', colorClass: 'text-blue-600' },
+                        { highlight: '10% Consultorias', text: 'Assessorias estratégicas (Ex: M&A, Jurídico).', colorClass: 'text-slate-500' },
+                        { highlight: '10% Dev. Institucional', text: 'Fortalecimento da governança e conselho.', colorClass: 'text-slate-600' },
                     ],
                 },
             ]

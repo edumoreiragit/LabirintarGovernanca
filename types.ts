@@ -25,7 +25,7 @@ export type TableRow = (string | boolean)[];
 
 export type FinancialModel = {
     name: string;
-    title: string;
+    title:string;
     description: string;
     revenueShare: string;
     revenueShareDetails?: ReactNode;
@@ -41,9 +41,9 @@ export type Slide = {
     backgroundImage?: string;
     stats?: { value: number; text: string; prefix?: string; suffix?: string; source?: string }[];
     highlightCard?: { text: string; };
-    cards?: { title: ReactNode; text: ReactNode; icon?: string, rotation?: string, carouselImages?: string[] }[];
+    cards?: { title: ReactNode; text: ReactNode; icon?: string, rotation?: string, carouselImages?: string[], action?: 'openNetworkGraph' }[];
     carouselImages?: { component: string; url: string; }[];
-    quote?: { text: string; author: string };
+    quote?: { text: ReactNode; author: string };
     bifurcationOptions?: { audience: Audience; icon: string; title: string; description: string; subtext: string; }[];
     columns?: {
         icon?: string;

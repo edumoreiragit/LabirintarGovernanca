@@ -104,7 +104,7 @@ const NinaAI: React.FC<NinaAIProps> = ({ isOpen, onClose, preloadedContent, isPr
             >
                 <div className="flex justify-between items-center mb-4 flex-shrink-0">
                     <div className="flex items-center gap-3">
-                        <img src="https://clubesa.github.io/governanca/pitchDeck/image/IMG_1229.png" alt="Nina AI Avatar" className="w-12 h-12 object-contain" />
+                        <img src="https://edumoreiragit.github.io/Imagens/Labirintar/IMG_3281.png" alt="Nina AI Avatar" className="w-12 h-12 object-cover rounded-full" />
                         <h3 className="text-2xl font-bold accent-color">Nina AI</h3>
                     </div>
                     <button onClick={onClose} className="text-3xl font-bold text-gray-400 hover:text-gray-700 transition-colors">&times;</button>

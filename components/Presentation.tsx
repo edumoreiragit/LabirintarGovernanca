@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ReferenceLine, Label,
 } from 'recharts';
@@ -7,15 +7,19 @@ import { REVENUE_SPLIT_DATA, USE_OF_FUNDS_INVESTOR_DATA, REVENUE_PROJECTION_DATA
 import { Slide, Audience, TrackId, NinaResponse } from '../types';
 import NinaAI from './NinaAI';
 import * as geminiService from '../services/geminiService';
+import NetworkLightbox from './NetworkLightbox';
 
-const DoughnutChart: React.FC<{ data: { name: string; value: number; fill: string }[] }> = ({ data }) => (
+const SpecialistNetworkGraph = lazy(() => import('./NetworkGraph'));
+
+
+const DoughnutChart: React.FC<{ data: { name: string; value: number; fill: string }[]; showLegend?: boolean }> = ({ data, showLegend = true }) => (
     <ResponsiveContainer width="100%" height={350}>
         <PieChart>
             <Pie data={data} cx="50%" cy="50%" labelLine={false} innerRadius={80} outerRadius={120} fill="#8884d8" dataKey="value" nameKey="name">
                 {data.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
             </Pie>
             <Tooltip formatter={(value: number) => `${value}%`} />
-            <Legend wrapperStyle={{fontSize: '0.8rem'}}/>
+            {showLegend && <Legend wrapperStyle={{fontSize: '0.8rem'}}/>}
         </PieChart>
     </ResponsiveContainer>
 );
@@ -213,7 +217,7 @@ const AnimatedCounter: React.FC<{ stat: { value: number; text: string; prefix?: 
 };
 
 
-const SlideRenderer: React.FC<{ slide: Slide, onSelectAudience: (audience: Audience) => void, onAiInteraction: (prompt: string) => void, onImageClick: (images: string[], startIndex: number) => void }> = ({ slide, onSelectAudience, onAiInteraction, onImageClick }) => {
+const SlideRenderer: React.FC<{ slide: Slide, onSelectAudience: (audience: Audience) => void, onAiInteraction: (prompt: string) => void, onImageClick: (images: string[], startIndex: number) => void, onOpenNetworkGraph: () => void }> = ({ slide, onSelectAudience, onAiInteraction, onImageClick, onOpenNetworkGraph }) => {
     const renderLayout = () => {
         switch (slide.layout) {
             case 'cover': {
@@ -286,7 +290,7 @@ const SlideRenderer: React.FC<{ slide: Slide, onSelectAudience: (audience: Audie
                             </div>
                             <div className="mt-6 relative max-w-sm mx-auto">
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                     <img src={LOGOS['labirintar_main']} alt="LABirintar Logo" className="w-24 h-24 object-contain"/>
+                                     <img src="https://edumoreiragit.github.io/Imagens/Labirintar/IMG_3281.png" alt="Nina AI" className="w-24 h-24 object-cover rounded-full shadow-lg"/>
                                 </div>
                                 <div className="grid grid-cols-2 gap-5">
                                     {slide.cards?.map((card, index) => (
@@ -328,9 +332,15 @@ const SlideRenderer: React.FC<{ slide: Slide, onSelectAudience: (audience: Audie
                         {slide.cards && (
                             <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
                                 {slide.cards.map((card, index) => (
-                                    <div key={index} className="p-6 bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col">
+                                    <div 
+                                        key={index} 
+                                        className={`p-6 bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col ${card.action === 'openNetworkGraph' ? 'cursor-pointer group' : ''}`}
+                                        onClick={card.action === 'openNetworkGraph' ? onOpenNetworkGraph : undefined}
+                                        role={card.action === 'openNetworkGraph' ? 'button' : undefined}
+                                        aria-label={card.action === 'openNetworkGraph' ? `Abrir visualização da ${card.title}` : undefined}
+                                    >
                                         <h3 className="text-xl font-bold text-center">{card.title}</h3>
-                                        <div className={`text-gray-600 text-sm mt-2 ${!card.carouselImages ? 'flex-grow' : ''}`}>
+                                        <div className={`text-gray-600 text-sm mt-2 ${!card.carouselImages && card.action !== 'openNetworkGraph' ? 'flex-grow' : ''}`}>
                                           {card.text}
                                         </div>
                                         {card.carouselImages && (
@@ -339,37 +349,58 @@ const SlideRenderer: React.FC<{ slide: Slide, onSelectAudience: (audience: Audie
                                                 onImageClick={(imageIndex) => onImageClick(card.carouselImages || [], imageIndex)}
                                             />
                                         )}
+                                        {card.action === 'openNetworkGraph' && (
+                                            <div className="relative h-40 w-full mt-4 rounded-lg flex-grow overflow-hidden bg-gray-100 border">
+                                                <Suspense fallback={<div className="w-full h-full bg-gray-200 animate-pulse rounded-lg"></div>}>
+                                                    <SpecialistNetworkGraph isPreview onSpecialtyClick={() => {}} />
+                                                </Suspense>
+                                                 <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                                     <span className="text-white text-lg font-bold drop-shadow-md">Explorar Rede</span>
+                                                 </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
                         )}
                     </div>
                 );
-            case 'traction':
+            case 'traction': {
+                const hasBg = !!slide.backgroundImage;
+                const titleColorClass = hasBg ? 'text-white drop-shadow-lg' : 'text-gray-800';
+                const mainMessageColorClass = hasBg ? 'text-gray-200 drop-shadow-md' : 'text-gray-600';
+                const statTextColorClass = hasBg ? 'text-gray-200 drop-shadow-sm' : 'text-gray-600';
+                const quoteBgClass = hasBg ? 'bg-black/30 backdrop-blur-sm' : 'bg-[#ffe9c9]/60';
+                const quoteTextColorClass = hasBg ? 'text-white' : 'text-gray-700';
+                const quoteAuthorColorClass = hasBg ? 'text-gray-200' : 'text-gray-800';
+
                 return (
-                     <div className="text-center">
-                        <h2 className="text-3xl md:text-4xl font-bold tracking-tight">{slide.title}</h2>
-                        <p className="mt-4 text-lg text-gray-600 max-w-3xl mx-auto">{slide.mainMessage}</p>
+                     <div className="text-center flex flex-col justify-center h-full py-2">
+                        <div className="animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+                            <h2 className={`text-3xl md:text-4xl font-bold tracking-tight ${titleColorClass}`}>{slide.title}</h2>
+                            <p className={`mt-4 text-lg max-w-3xl mx-auto ${mainMessageColorClass}`}>{slide.mainMessage}</p>
+                        </div>
                         {slide.stats && (
-                             <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-8">
-                                {slide.stats.map(item => (
-                                    <div key={item.text} className="text-center">
+                             <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-6">
+                                {slide.stats.map((item, index) => (
+                                    <div key={item.text} className="text-center animate-fade-in-up" style={{ animationDelay: `${300 + index * 150}ms` }}>
                                         <p className="text-5xl font-bold accent-color">
                                             <AnimatedCounter stat={item} />
                                         </p>
-                                        <p className="mt-2 text-gray-600">{item.text}</p>
+                                        <p className={`mt-2 ${statTextColorClass}`}>{item.text}</p>
                                     </div>
                                 ))}
                             </div>
                         )}
                         {slide.quote && (
-                            <div className="mt-12 bg-[#ffe9c9]/60 p-8 rounded-2xl max-w-4xl mx-auto">
-                                <p className="text-xl italic text-gray-700">"{slide.quote.text}"</p>
-                                <p className="mt-4 font-semibold text-right text-gray-800">- {slide.quote.author}</p>
+                            <div className={`mt-6 p-4 rounded-2xl max-w-4xl mx-auto animate-fade-in-up text-left ${quoteBgClass}`} style={{ animationDelay: `${300 + (slide.stats?.length || 0) * 150}ms` }}>
+                                <div className={`text-sm leading-snug ${quoteTextColorClass}`}>{slide.quote.text}</div>
+                                <p className={`mt-2 text-sm font-semibold text-right ${quoteAuthorColorClass}`}>- {slide.quote.author}</p>
                             </div>
                         )}
                     </div>
                 );
+            }
             case 'ecosystem':
                 return (
                      <div className="text-center">
@@ -487,7 +518,7 @@ const SlideRenderer: React.FC<{ slide: Slide, onSelectAudience: (audience: Audie
                                        </ul>
                                    )}
                                    {col.chart === 'revenue_split' && <DoughnutChart data={REVENUE_SPLIT_DATA} />}
-                                   {col.chart === 'use_of_funds' && <DoughnutChart data={USE_OF_FUNDS_INVESTOR_DATA} />}
+                                   {col.chart === 'use_of_funds' && <DoughnutChart data={USE_OF_FUNDS_INVESTOR_DATA} showLegend={false} />}
                                    {col.chart === 'projections' && <ProjectionsChart />}
                                </div>
                            ))}
@@ -572,10 +603,10 @@ const SlideRenderer: React.FC<{ slide: Slide, onSelectAudience: (audience: Audie
                      <div className="text-center">
                         <h2 className="text-3xl md:text-4xl font-bold tracking-tight">{slide.title}</h2>
                         <p className="mt-3 text-lg text-gray-500">{slide.subtitle}</p>
-                         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8 items-start max-w-6xl mx-auto justify-center">
+                         <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 items-start max-w-7xl mx-auto justify-center">
                            {slide.teamMembers?.map(member => (
                                <div key={member.name} className="flex flex-col items-center">
-                                   <img src={TEAM_PHOTOS[member.photoKey]} alt={member.name} className="w-40 h-40 rounded-full mx-auto shadow-lg object-cover mb-4" />
+                                   <img src={TEAM_PHOTOS[member.photoKey]} alt={member.name} className="w-40 h-40 rounded-full mx-auto shadow-lg object-cover mb-4 bg-gray-200" />
                                    <h3 className="text-2xl font-bold">{member.name}</h3>
                                    <p className="accent-color font-semibold">{member.role}</p>
                                    {member.description && <div className="mt-4 text-sm text-gray-600 text-left max-w-xs">{member.description}</div>}
@@ -685,6 +716,7 @@ const Presentation: React.FC = () => {
     const [aiInteractionResult, setAiInteractionResult] = useState<NinaResponse | null>(null);
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [lightboxConfig, setLightboxConfig] = useState<{ images: string[]; startIndex: number } | null>(null);
+    const [isNetworkLightboxOpen, setIsNetworkLightboxOpen] = useState(false);
 
     const currentSlides = useMemo(() => PITCH_DECK_DATA[trackId] || PITCH_DECK_DATA.common, [trackId]);
     const currentSlide = useMemo(() => {
@@ -756,10 +788,14 @@ const Presentation: React.FC = () => {
         setLightboxConfig(null);
     }, []);
 
+    const handleOpenNetworkGraph = useCallback(() => {
+        setIsNetworkLightboxOpen(true);
+    }, []);
+
     // Keyboard navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-             if (lightboxConfig) return; // Disable slide navigation when lightbox is open
+             if (lightboxConfig || isNetworkLightboxOpen) return;
             if (e.key === 'ArrowRight') {
                 handleNext();
             } else if (e.key === 'ArrowLeft') {
@@ -769,11 +805,10 @@ const Presentation: React.FC = () => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleNext, handlePrev, lightboxConfig]);
+    }, [handleNext, handlePrev, lightboxConfig, isNetworkLightboxOpen]);
 
 
     if (!currentSlide) {
-        // This guard clause prevents crashes if the slide data is somehow not ready.
         return (
             <div className="presentation-wrapper">
                 <div className="slide-container flex items-center justify-center">
@@ -794,6 +829,7 @@ const Presentation: React.FC = () => {
                   onSelectAudience={handleSelectAudience} 
                   onAiInteraction={handleAiInteraction} 
                   onImageClick={handleOpenLightbox}
+                  onOpenNetworkGraph={handleOpenNetworkGraph}
                 />
             </div>
 
@@ -807,7 +843,7 @@ const Presentation: React.FC = () => {
             </div>
             
             <button onClick={() => setIsNinaOpen(true)} className="nina-fab" title="Converse com a Nina AI">
-                <img src="https://clubesa.github.io/governanca/pitchDeck/image/IMG_1229.png" alt="Nina AI Avatar" className="w-full h-full object-contain p-2" />
+                <img src="https://edumoreiragit.github.io/Imagens/Labirintar/IMG_3281.png" alt="Nina AI Avatar" className="w-full h-full object-cover rounded-full" />
             </button>
 
             <NinaAI 
@@ -823,6 +859,9 @@ const Presentation: React.FC = () => {
                     startIndex={lightboxConfig.startIndex}
                     onClose={handleCloseLightbox}
                 />
+            )}
+             {isNetworkLightboxOpen && (
+                <NetworkLightbox onClose={() => setIsNetworkLightboxOpen(false)} />
             )}
         </div>
     );
