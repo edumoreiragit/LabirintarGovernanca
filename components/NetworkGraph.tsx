@@ -105,9 +105,6 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
     const raycasterRef = useRef(new THREE.Raycaster());
     const mouseRef = useRef(new THREE.Vector2());
 
-    const tourCurveRef = useRef<THREE.CatmullRomCurve3 | null>(null);
-    const tourProgressRef = useRef(Math.random());
-
     const isUserInteractingRef = useRef(false);
     const idleTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -213,6 +210,7 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
         const mount = mountRef.current;
         if (!mount) return;
 
+        isUserInteractingRef.current = true; // Start as "interacting" to allow initial physics to settle
         buildAdjacencyList();
         
         const degreeMap = new Map<string, number>();
@@ -230,6 +228,7 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
 
         const camera = new THREE.PerspectiveCamera(75, mount.clientWidth / mount.clientHeight, 0.1, 1000);
         cameraRef.current = camera;
+        camera.position.z = 50; // Start far away, will be adjusted
         
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(mount.clientWidth, mount.clientHeight);
@@ -405,40 +404,6 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
             }
         });
 
-        
-        const setupCameraAndTour = () => {
-             if (!graphGroupRef.current) return;
-            for (let i = 0; i < 200; i++) { world.step(1 / 60); } // Settle physics
-
-            const box = new THREE.Box3().setFromObject(graphGroupRef.current);
-            const size = box.getSize(new THREE.Vector3());
-            const center = box.getCenter(new THREE.Vector3());
-        
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const fov = camera.fov * (Math.PI / 180);
-            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-            cameraZ *= isPreview ? 2.5 : 2.4;
-        
-            camera.position.set(center.x, center.y, center.z + cameraZ);
-            controls.target.copy(center);
-
-            if (labelsRef.current.length > 2 && !isPreview) {
-                const points = labelsRef.current.map(label => {
-                    const centroid = new THREE.Vector3();
-                    const members = label.memberIds.map(getNodeById).filter(Boolean) as NetworkNode[];
-                    if (members.length === 0) return new THREE.Vector3();
-                    members.forEach(node => centroid.add(node.mesh.position));
-                    centroid.divideScalar(members.length);
-                    const orbitOffset = new THREE.Vector3().subVectors(centroid, center).normalize().multiplyScalar(15);
-                    return centroid.add(orbitOffset);
-                });
-                tourCurveRef.current = new THREE.CatmullRomCurve3(points, true, 'catmullrom', 0.5);
-            }
-            controls.update();
-        };
-
-        setupCameraAndTour();
-
         const clock = new THREE.Clock();
         const animate = () => {
             animationFrameIdRef.current = requestAnimationFrame(animate);
@@ -458,10 +423,9 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
                         const singleNode = memberNodes[0];
                         const nodePosition = singleNode.mesh.position;
                         const nodeRadius = (singleNode.mesh.geometry as THREE.SphereGeometry).parameters.radius;
-                        // Position the label BELOW the node
                         const labelPosition = new THREE.Vector3(
                             nodePosition.x,
-                            nodePosition.y - nodeRadius - 0.5, // Offset below
+                            nodePosition.y - nodeRadius - 0.5,
                             nodePosition.z
                         );
                         label.sprite.position.copy(labelPosition);
@@ -486,19 +450,29 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
                 }
             });
             
-            if (!isUserInteractingRef.current && graphGroupRef.current && !isPreview && tourCurveRef.current) {
-                tourProgressRef.current = (tourProgressRef.current + 0.01 * deltaTime) % 1;
-                const cameraPositionOnCurve = tourCurveRef.current.getPointAt(tourProgressRef.current);
-                
-                const box = new THREE.Box3().setFromObject(graphGroupRef.current);
-                const graphCenter = box.getCenter(new THREE.Vector3());
-                
-                const distance = graphCenter.distanceTo(camera.position);
-                const direction = new THREE.Vector3().subVectors(cameraPositionOnCurve, graphCenter).normalize();
-                const newCameraPos = new THREE.Vector3().copy(graphCenter).addScaledVector(direction, distance);
-                
-                camera.position.lerp(newCameraPos, 0.02);
-                controls.target.lerp(graphCenter, 0.02);
+            // Continuous auto-framing when user is idle
+            if (!isUserInteractingRef.current && !isPreview) {
+                const box = new THREE.Box3().setFromObject(graphGroup);
+                const size = box.getSize(new THREE.Vector3());
+                const center = box.getCenter(new THREE.Vector3());
+
+                if (size.x > 0.1 && size.y > 0.1) {
+                    const fov = camera.fov * (Math.PI / 180);
+                    const aspect = camera.aspect;
+                    const distanceH = (size.y / 2) / Math.tan(fov / 2);
+                    const distanceW = (size.x / 2) / (Math.tan(fov / 2) * aspect);
+                    
+                    const padding = 1.5;
+                    const targetDistance = Math.max(distanceW, distanceH) * padding;
+
+                    // Avoid getting too close
+                    const finalDistance = Math.max(targetDistance, controls.minDistance);
+
+                    const targetPosition = new THREE.Vector3(center.x, center.y, center.z + finalDistance);
+
+                    camera.position.lerp(targetPosition, 0.02);
+                    controls.target.lerp(center, 0.02);
+                }
             }
 
             controls.update();
@@ -543,8 +517,19 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
             }
         };
 
-        const onInteractionStart = () => { isUserInteractingRef.current = true; if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); };
-        const onInteractionEnd = () => { if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); idleTimeoutRef.current = setTimeout(() => { isUserInteractingRef.current = false; }, 5000); };
+        const onInteractionStart = () => { 
+            isUserInteractingRef.current = true;
+            if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); 
+        };
+        const onInteractionEnd = () => { 
+            if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); 
+            idleTimeoutRef.current = setTimeout(() => { isUserInteractingRef.current = false; }, 5000); 
+        };
+
+        // Start in idle mode after a short delay
+        const initialSettleTimeout = setTimeout(() => {
+            isUserInteractingRef.current = false;
+        }, 3000);
 
         controls.addEventListener('start', onInteractionStart);
         controls.addEventListener('end', onInteractionEnd);
@@ -554,6 +539,7 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
         animate();
 
         return () => {
+            clearTimeout(initialSettleTimeout);
             controls.removeEventListener('start', onInteractionStart);
             controls.removeEventListener('end', onInteractionEnd);
             window.removeEventListener('resize', handleResize);
