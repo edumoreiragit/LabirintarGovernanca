@@ -453,11 +453,24 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
 
             labelsRef.current.forEach(label => {
                 const memberNodes = label.memberIds.map(getNodeById).filter((n): n is NetworkNode => !!n);
-                if(memberNodes.length > 0) {
-                    const centerOfMass = new THREE.Vector3();
-                    memberNodes.forEach(node => centerOfMass.add(node.mesh.position));
-                    centerOfMass.divideScalar(memberNodes.length);
-                    label.sprite.position.copy(centerOfMass);
+                if (memberNodes.length > 0) {
+                    if (memberNodes.length === 1) {
+                        const singleNode = memberNodes[0];
+                        const nodePosition = singleNode.mesh.position;
+                        const nodeRadius = (singleNode.mesh.geometry as THREE.SphereGeometry).parameters.radius;
+                        // Position the label BELOW the node
+                        const labelPosition = new THREE.Vector3(
+                            nodePosition.x,
+                            nodePosition.y - nodeRadius - 0.5, // Offset below
+                            nodePosition.z
+                        );
+                        label.sprite.position.copy(labelPosition);
+                    } else {
+                        const centerOfMass = new THREE.Vector3();
+                        memberNodes.forEach(node => centerOfMass.add(node.mesh.position));
+                        centerOfMass.divideScalar(memberNodes.length);
+                        label.sprite.position.copy(centerOfMass);
+                    }
                 }
             });
 
