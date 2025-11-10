@@ -53,7 +53,7 @@ const NetworkLightbox: React.FC<NetworkLightboxProps> = ({ onClose }) => {
 
     return (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4" onClick={onClose} role="dialog" aria-modal="true">
-            <div className="relative w-full h-full max-w-6xl max-h-[90vh] bg-gray-800/50 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="relative w-full h-full bg-gray-800/50 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                 <button aria-label="Fechar" onClick={onClose} className="absolute top-2 right-4 text-white text-5xl font-bold hover:text-gray-300 transition-colors z-30">&times;</button>
                 
                 {view === 'graph' && (
@@ -64,7 +64,7 @@ const NetworkLightbox: React.FC<NetworkLightboxProps> = ({ onClose }) => {
                         </div>
                          <input
                             type="text"
-                            placeholder="Pesquisar Experiência..."
+                            placeholder="Pesquisar por Educador ou Especialidade..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-full max-w-sm p-2 rounded-full bg-black/50 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#ff595a] text-center placeholder-gray-400"

@@ -1,25 +1,35 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { SPECIALTY_DATA, Specialty } from '../content/networkData';
+import { SPECIALTY_DATA, Specialty, Specialist } from '../content/networkData';
 
-const NODE_RADIUS_SPECIALTY = 1.2;
-const NODE_RADIUS_SPECIALIST = 0.5;
-const REPULSION_STRENGTH = 1.5;
-const CENTER_ATTRACTION = 0.05;
-const BRIDGE_EDGE_DISTANCE = 20;
+const BASE_NODE_RADIUS_SPECIALIST = 0.5;
+const REPULSION_STRENGTH = 10.0; 
+const CENTER_ATTRACTION = 0.01;
+const BRIDGE_EDGE_DISTANCE = 15; 
+const BRIDGE_EDGE_STIFFNESS = 1;
+const CLUSTER_COHESION_STRENGTH = 0.5; 
+const CLUSTER_REPULSION_STRENGTH = 150.0;
 
-const COLOR_SPECIALTY = 0xffa400; // Accent Orange/Yellow
-const COLOR_SPECIALIST = 0xff595a; // Accent Red
-const COLOR_EDGE = 0xaec5e7; // Accent Light Blue
+const COLOR_SPECIALTY = 0xffa400; // Laranja
+const COLOR_SPECIALIST = 0xff595a; // Goiaba
+const COLOR_EXTERNAL_INDICATOR = 0xb2dcd5; // Menta
+const COLOR_EDGE = 0xaec5e7; // Hortencia
 
 type NetworkNode = {
     id: string;
     mesh: THREE.Mesh;
     body: CANNON.Body;
-    isSpecialty: boolean;
-    specialtyId?: string; // To link specialists to their specialty
+    isSpecialty: boolean; // Will be false for all physical nodes now
+    specialtyId: string;
+};
+
+type FloatingLabel = {
+    id: string;
+    name: string;
+    sprite: THREE.Sprite;
+    memberIds: string[];
 };
 
 type NetworkEdge = {
@@ -27,7 +37,6 @@ type NetworkEdge = {
     constraint: CANNON.Constraint;
 };
 
-// Helper function for drawing a rounded rectangle for cross-browser compatibility.
 const roundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) => {
     ctx.beginPath();
     ctx.moveTo(x + radius, y);
@@ -42,13 +51,8 @@ const roundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, width: n
     ctx.closePath();
 };
 
-interface SpecialistNetworkGraphProps {
-    onSpecialtyClick: (content: string) => void;
-    isPreview?: boolean;
-    searchQuery?: string;
-}
-
-const createTextSprite = (text: string, fontSize: number = 24, textColor: string = '#ffffff') => {
+// FIX: Pass isPreview as an argument to resolve scope issue.
+const createTextSprite = (text: string, isPreview: boolean, fontSize: number = 24, textColor: string = '#ffffff', bgColor: string = 'rgba(0, 0, 0, 0.4)') => {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     if (!context) return new THREE.Sprite();
@@ -58,12 +62,11 @@ const createTextSprite = (text: string, fontSize: number = 24, textColor: string
     const metrics = context.measureText(text);
     const textWidth = metrics.width;
     
-    canvas.width = textWidth + 20; // padding
-    canvas.height = fontSize + 10; // padding
+    canvas.width = textWidth + 20;
+    canvas.height = fontSize + 10;
 
-    // Re-apply font after resizing canvas
     context.font = font;
-    context.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    context.fillStyle = bgColor;
     roundRect(context, 0, 0, canvas.width, canvas.height, 8);
     context.fill();
     context.textAlign = 'center';
@@ -74,16 +77,25 @@ const createTextSprite = (text: string, fontSize: number = 24, textColor: string
     const texture = new THREE.CanvasTexture(canvas);
     const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
     const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.scale.set(canvas.width * 0.05, canvas.height * 0.05, 1.0);
+    const scaleFactor = isPreview ? 0.03 : 0.05;
+    sprite.scale.set(canvas.width * scaleFactor, canvas.height * scaleFactor, 1.0);
     sprite.userData = { isLabel: true };
     return sprite;
 };
 
+interface SpecialistNetworkGraphProps {
+    onSpecialtyClick: (content: string) => void;
+    isPreview?: boolean;
+    searchQuery?: string;
+}
 
 const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpecialtyClick, isPreview = false, searchQuery = '' }) => {
     const mountRef = useRef<HTMLDivElement | null>(null);
     const nodesRef = useRef<NetworkNode[]>([]);
     const edgesRef = useRef<NetworkEdge[]>([]);
+    const labelsRef = useRef<FloatingLabel[]>([]);
+    const adjacencyListRef = useRef<Map<string, Set<string>>>(new Map());
+    
     const animationFrameIdRef = useRef<number | null>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     
@@ -93,66 +105,124 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
     const raycasterRef = useRef(new THREE.Raycaster());
     const mouseRef = useRef(new THREE.Vector2());
 
-    // Refs for cinematic camera
     const tourCurveRef = useRef<THREE.CatmullRomCurve3 | null>(null);
-    const tourProgressRef = useRef(Math.random()); // Start at a random point
+    const tourProgressRef = useRef(Math.random());
 
     const isUserInteractingRef = useRef(false);
     const idleTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
+    const allSpecialists = useMemo(() => SPECIALTY_DATA.flatMap(s => s.specialists.map(sp => ({ ...sp, specialtyId: s.id }))), []);
+
+    const getNodeById = useCallback((id: string) => nodesRef.current.find(n => n.id === id), []);
+
+    const buildAdjacencyList = useCallback(() => {
+        const adj = new Map<string, Set<string>>();
+        allSpecialists.forEach(s => adj.set(s.id, new Set()));
+
+        allSpecialists.forEach(s1 => {
+            if (s1.indicatedBy) {
+                const indicator = allSpecialists.find(s2 => s2.name === s1.indicatedBy);
+                if (indicator) {
+                    adj.get(s1.id)?.add(indicator.id);
+                    adj.get(indicator.id)?.add(s1.id);
+                }
+            }
+        });
+        adjacencyListRef.current = adj;
+    }, [allSpecialists]);
 
     useEffect(() => {
         const lowerCaseQuery = searchQuery.toLowerCase().trim();
         if (!nodesRef.current.length) return;
 
-        const matchingSpecialtyIds = new Set<string>();
-        if (lowerCaseQuery === '') {
-            SPECIALTY_DATA.forEach(s => matchingSpecialtyIds.add(s.id));
-        } else {
+        const highlightedLevels = new Map<string, number>();
+
+        if (lowerCaseQuery) {
+            const seedNodeIds = new Set<string>();
             SPECIALTY_DATA.forEach(specialty => {
                 if (specialty.name.toLowerCase().includes(lowerCaseQuery)) {
-                    matchingSpecialtyIds.add(specialty.id);
+                    specialty.specialists.forEach(s => seedNodeIds.add(s.id));
                 }
             });
+            allSpecialists.forEach(specialist => {
+                if (specialist.name.toLowerCase().includes(lowerCaseQuery)) {
+                    seedNodeIds.add(specialist.id);
+                }
+            });
+
+            // BFS for degrees of connection
+            const queue: { id: string; level: number }[] = [];
+            seedNodeIds.forEach(id => {
+                queue.push({ id, level: 0 });
+                highlightedLevels.set(id, 0);
+            });
+
+            let head = 0;
+            while(head < queue.length) {
+                const { id: currentId, level: currentLevel } = queue[head++];
+                if (currentLevel >= 1) continue; // Show only 1st degree connections
+
+                const neighbors = adjacencyListRef.current.get(currentId);
+                if (neighbors) {
+                    neighbors.forEach(neighborId => {
+                        if (!highlightedLevels.has(neighborId)) {
+                            highlightedLevels.set(neighborId, currentLevel + 1);
+                            queue.push({ id: neighborId, level: currentLevel + 1 });
+                        }
+                    });
+                }
+            }
         }
+
+        const opacities: { [key: number]: number } = { 0: 1.0, 1: 1.0, 2: 0.95, 3: 0.9 };
+        const isSearching = highlightedLevels.size > 0;
 
         nodesRef.current.forEach(node => {
             const material = node.mesh.material as THREE.MeshPhongMaterial;
-            const isMatch = node.isSpecialty ? matchingSpecialtyIds.has(node.id) : (node.specialtyId ? matchingSpecialtyIds.has(node.specialtyId) : false);
-
-            material.transparent = true;
-            material.opacity = isMatch ? 1.0 : 0.1;
-
+            const level = highlightedLevels.get(node.id);
+            const isHighlighted = level !== undefined;
+            
+            material.opacity = isSearching ? (isHighlighted ? opacities[level] : 0.1) : 1.0;
             node.mesh.children.forEach(child => {
                 if (child instanceof THREE.Sprite) {
-                    (child.material as THREE.SpriteMaterial).opacity = isMatch ? 1.0 : 0.05;
+                    (child.material as THREE.SpriteMaterial).opacity = material.opacity > 0.15 ? 1.0 : 0.05;
                 }
             });
+        });
+        
+        labelsRef.current.forEach(label => {
+            const isAnyMemberHighlighted = label.memberIds.some(id => highlightedLevels.has(id));
+            label.sprite.material.opacity = isSearching ? (isAnyMemberHighlighted ? 1.0 : 0.05) : 1.0;
         });
 
         edgesRef.current.forEach(edge => {
             const constraint = edge.constraint as CANNON.DistanceConstraint;
-            const nodeA = nodesRef.current.find(n => n.body.id === constraint.bodyA.id);
-            const nodeB = nodesRef.current.find(n => n.body.id === constraint.bodyB.id);
+            const nodeA = getNodeById(constraint.bodyA.userData.id);
+            const nodeB = getNodeById(constraint.bodyB.userData.id);
             const material = edge.line.material as THREE.LineBasicMaterial;
             
-            const isNodeAMatch = nodeA?.isSpecialty ? matchingSpecialtyIds.has(nodeA.id) : (nodeA?.specialtyId ? matchingSpecialtyIds.has(nodeA.specialtyId) : false);
-            const isNodeBMatch = nodeB?.isSpecialty ? matchingSpecialtyIds.has(nodeB.id) : (nodeB?.specialtyId ? matchingSpecialtyIds.has(nodeB.specialtyId) : false);
+            const isHighlighted = isSearching 
+                ? (nodeA && nodeB && highlightedLevels.has(nodeA.id) && highlightedLevels.has(nodeB.id))
+                : true;
 
-            material.opacity = (isNodeAMatch && isNodeBMatch) ? 0.6 : 0.05;
+            material.opacity = isHighlighted ? 0.8 : 0.05;
         });
-
-    }, [searchQuery]);
-
+    }, [searchQuery, allSpecialists, getNodeById]);
 
     useEffect(() => {
         const mount = mountRef.current;
         if (!mount) return;
 
-        // --- Basic Scene Setup ---
+        buildAdjacencyList();
+        
+        const degreeMap = new Map<string, number>();
+        allSpecialists.forEach(s => {
+            degreeMap.set(s.id, adjacencyListRef.current.get(s.id)?.size || 0);
+        });
+
         const scene = new THREE.Scene();
         sceneRef.current = scene;
-        scene.fog = new THREE.Fog(0x111111, 50, 100);
+        scene.fog = new THREE.Fog(0x111111, 70, 150);
 
         const graphGroup = new THREE.Group();
         scene.add(graphGroup);
@@ -168,7 +238,6 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
         mount.appendChild(renderer.domElement);
         rendererRef.current = renderer;
 
-        // --- Controls ---
         const controls = new OrbitControls(camera, renderer.domElement);
         if (isPreview) {
             controls.enabled = false;
@@ -177,71 +246,57 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
             controls.dampingFactor = 0.05;
             controls.minDistance = 20;
             controls.maxDistance = 150;
-            controls.autoRotate = false;
         }
-
-
-        // --- Lighting ---
+        
         scene.add(new THREE.AmbientLight(0xffffff, 0.8));
         const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
         dirLight.position.set(5, 10, 7.5);
         scene.add(dirLight);
 
-        // --- Physics World Setup ---
         const world = new CANNON.World({ gravity: new CANNON.Vec3(0, 0, 0) });
-        world.broadphase = new CANNON.NaiveBroadphase();
-        (world.solver as CANNON.GSSolver).iterations = 10;
         const nodeMaterial = new CANNON.Material('nodeMaterial');
-        const nodeContactMaterial = new CANNON.ContactMaterial(nodeMaterial, nodeMaterial, { friction: 0.1, restitution: 0.7 });
-        world.addContactMaterial(nodeContactMaterial);
+        world.addContactMaterial(new CANNON.ContactMaterial(nodeMaterial, nodeMaterial, { friction: 0.3, restitution: 0.5 }));
 
-        // --- Materials & Geometries (reusable) ---
-        const specialtyMaterial = new THREE.MeshPhongMaterial({ color: COLOR_SPECIALTY, shininess: 30, transparent: true });
         const specialistMaterial = new THREE.MeshPhongMaterial({ color: COLOR_SPECIALIST, shininess: 30, transparent: true });
-        const specialtyGeometry = new THREE.SphereGeometry(NODE_RADIUS_SPECIALTY, 32, 16);
-        const specialistGeometry = new THREE.SphereGeometry(NODE_RADIUS_SPECIALIST, 16, 8);
+        const externalMaterial = new THREE.MeshPhongMaterial({ color: COLOR_EXTERNAL_INDICATOR, shininess: 30, transparent: true });
         const edgeMaterial = new THREE.LineBasicMaterial({ color: COLOR_EDGE, transparent: true, opacity: 0.6 });
         
-        // --- Helper Functions ---
-        const createNode = (id: string, position: THREE.Vector3, isSpecialty: boolean, data?: Specialty): NetworkNode => {
-            const radius = isSpecialty ? NODE_RADIUS_SPECIALTY : NODE_RADIUS_SPECIALIST;
-            const geometry = isSpecialty ? specialtyGeometry : specialistGeometry;
-            const material = isSpecialty ? specialtyMaterial.clone() : specialistMaterial.clone();
+        const createSpecialistNode = (specialistData: Specialist, position: THREE.Vector3, specialtyId: string): NetworkNode => {
+            const degree = degreeMap.get(specialistData.id) || 0;
+            const radius = BASE_NODE_RADIUS_SPECIALIST + Math.log1p(degree) * 0.9;
+            const geometry = new THREE.SphereGeometry(radius, 16, 8);
+            const material = (specialistData.isExternal ? externalMaterial : specialistMaterial).clone();
             
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.copy(position);
-            mesh.userData = { id, isSpecialty, data };
+            mesh.userData = { id: specialistData.id, isSpecialty: false, data: specialistData };
             
-            if (isSpecialty && data && !isPreview) {
-                const textSprite = createTextSprite(data.name);
-                textSprite.position.y = NODE_RADIUS_SPECIALTY + 0.5;
+            if (!isPreview) {
+                const textSprite = createTextSprite(specialistData.name, isPreview, 18, '#f4f0e8');
+                textSprite.position.y = radius + 0.3;
                 mesh.add(textSprite);
             }
-
             graphGroup.add(mesh);
-
+            
+            const mass = 1 + Math.log1p(degree) * 3;
             const shape = new CANNON.Sphere(radius);
-            const body = new CANNON.Body({ 
-                mass: isSpecialty ? 5 : 1, 
-                position: new CANNON.Vec3(position.x, position.y, position.z), 
-                material: nodeMaterial,
-                linearDamping: 0.7,
-                angularDamping: 0.7 
-            });
+            const body = new CANNON.Body({ mass, material: nodeMaterial, linearDamping: 0.8, angularDamping: 0.8 });
             body.addShape(shape);
+            body.position.set(position.x, position.y, position.z);
+            body.userData = { id: specialistData.id };
             world.addBody(body);
             
-            const nodeObject: NetworkNode = { id, mesh, body, isSpecialty, specialtyId: isSpecialty ? id : data?.id };
+            const nodeObject: NetworkNode = { id: specialistData.id, mesh, body, isSpecialty: false, specialtyId };
             nodesRef.current.push(nodeObject);
             return nodeObject;
         };
         
-        const createEdge = (node1: NetworkNode, node2: NetworkNode, distance: number) => {
+        const createEdge = (node1: NetworkNode, node2: NetworkNode, distance: number, stiffness: number) => {
             const geometry = new THREE.BufferGeometry().setFromPoints([node1.mesh.position, node2.mesh.position]);
             const line = new THREE.Line(geometry, edgeMaterial.clone());
             graphGroup.add(line);
             
-            const constraint = new CANNON.DistanceConstraint(node1.body, node2.body, distance, 100);
+            const constraint = new CANNON.DistanceConstraint(node1.body, node2.body, distance, stiffness);
             world.addConstraint(constraint);
             
             edgesRef.current.push({ line, constraint });
@@ -251,158 +306,165 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
              for (let i = 0; i < nodesRef.current.length; i++) {
                 const nodeA = nodesRef.current[i];
                 const forceToCenter = nodeA.body.position.clone().negate().scale(CENTER_ATTRACTION * nodeA.body.mass);
-                nodeA.body.applyForce(forceToCenter, nodeA.body.position);
+                nodeA.body.applyForce(forceToCenter);
                 
                 for (let j = i + 1; j < nodesRef.current.length; j++) {
                     const nodeB = nodesRef.current[j];
                     const diff = new CANNON.Vec3();
                     nodeA.body.position.vsub(nodeB.body.position, diff);
-                    const distance = diff.length();
+                    const distanceSq = diff.lengthSquared();
                     
-                    if (distance > 0.1) {
-                        const forceMagnitude = REPULSION_STRENGTH / (distance * distance);
+                    if (distanceSq > 0.01) {
+                        const forceMagnitude = REPULSION_STRENGTH / distanceSq;
                         diff.normalize();
                         const force = diff.scale(forceMagnitude);
-                        nodeA.body.applyForce(force, nodeA.body.position);
-                        nodeB.body.applyForce(force.negate(), nodeB.body.position);
+                        nodeA.body.applyForce(force);
+                        nodeB.body.applyForce(force.negate());
+                    }
+                }
+            }
+            
+            const centroidsData = labelsRef.current.map(label => {
+                const memberNodes = label.memberIds.map(getNodeById).filter((n): n is NetworkNode => !!n);
+                if (memberNodes.length === 0) return null;
+                const centerOfMass = new CANNON.Vec3();
+                memberNodes.forEach(node => centerOfMass.vadd(node.body.position, centerOfMass));
+                centerOfMass.scale(1 / memberNodes.length, centerOfMass);
+                return { center: centerOfMass, nodes: memberNodes };
+            }).filter((c): c is { center: CANNON.Vec3; nodes: NetworkNode[]; } => !!c);
+
+            // Cluster cohesion force
+            centroidsData.forEach(({ center, nodes }) => {
+                nodes.forEach(node => {
+                    const force = center.vsub(node.body.position).scale(CLUSTER_COHESION_STRENGTH * node.body.mass);
+                    node.body.applyForce(force);
+                });
+            });
+
+            // Inter-cluster repulsion force
+            for (let i = 0; i < centroidsData.length; i++) {
+                for (let j = i + 1; j < centroidsData.length; j++) {
+                    const { center: centerA, nodes: nodesA } = centroidsData[i];
+                    const { center: centerB, nodes: nodesB } = centroidsData[j];
+
+                    const diff = new CANNON.Vec3();
+                    centerA.vsub(centerB, diff);
+                    const distanceSq = diff.lengthSquared();
+
+                    if (distanceSq > 1) { // Avoid extreme forces at close range
+                        const forceMagnitude = CLUSTER_REPULSION_STRENGTH / distanceSq;
+                        diff.normalize();
+                        const force = diff.scale(forceMagnitude);
+                        
+                        nodesA.forEach(node => node.body.applyForce(force));
+                        nodesB.forEach(node => node.body.applyForce(force.negate()));
                     }
                 }
             }
         };
 
-        // --- Build Graph from Data ---
-        const specialtyNodesMap = new Map<string, NetworkNode>();
-        const specialistsBySpecialty = new Map<string, NetworkNode[]>();
+        const specialistNodesMap = new Map<string, NetworkNode>();
 
         SPECIALTY_DATA.forEach((specialtyData, i) => {
             const angle = (i / SPECIALTY_DATA.length) * Math.PI * 2;
-            const radius = 20 + Math.random() * 5;
-            const position = new THREE.Vector3(Math.cos(angle) * radius, (Math.random() - 0.5) * 10, Math.sin(angle) * radius);
-            const specialtyNode = createNode(specialtyData.id, position, true, specialtyData);
-            specialtyNodesMap.set(specialtyData.id, specialtyNode);
+            const radius = 25 + Math.random() * 5;
+            const initialClusterPosition = new THREE.Vector3(Math.cos(angle) * radius, (Math.random() - 0.5) * 10, Math.sin(angle) * radius);
+            
+            if (!isPreview) {
+                const labelSprite = createTextSprite(specialtyData.name, isPreview, 16, '#000000', 'rgba(255, 164, 0, 0.8)');
+                graphGroup.add(labelSprite);
+                labelsRef.current.push({
+                    id: specialtyData.id,
+                    name: specialtyData.name,
+                    sprite: labelSprite,
+                    memberIds: specialtyData.specialists.map(s => s.id),
+                });
+            }
 
-            const specialistNodes: NetworkNode[] = [];
             specialtyData.specialists.forEach((specialistData, j) => {
                 const sAngle = (j / specialtyData.specialists.length) * Math.PI * 2;
-                const sRadius = 4 + Math.random();
+                const sRadius = 3 + Math.random() * 1.5;
                 const sPosition = new THREE.Vector3(
-                    position.x + Math.cos(sAngle) * sRadius,
-                    position.y + (Math.random() - 0.5) * 4,
-                    position.z + Math.sin(sAngle) * sRadius
+                    initialClusterPosition.x + Math.cos(sAngle) * sRadius,
+                    initialClusterPosition.y + (Math.random() - 0.5) * 2,
+                    initialClusterPosition.z + Math.sin(sAngle) * sRadius
                 );
-                const specialistNode = createNode(specialistData.id, sPosition, false, specialtyData);
-                specialistNode.specialtyId = specialtyData.id;
-                specialistNodes.push(specialistNode);
-                createEdge(specialtyNode, specialistNode, sRadius);
+                const specialistNode = createSpecialistNode(specialistData, sPosition, specialtyData.id);
+                specialistNodesMap.set(specialistData.id, specialistNode);
             });
-            
-            specialistsBySpecialty.set(specialtyData.id, specialistNodes);
         });
         
-        const specialtyIds = Array.from(specialistsBySpecialty.keys());
-        if (specialtyIds.length > 1) {
-            let connections = 0;
-            const maxConnections = specialtyIds.length * 1.5; 
-            for (let i = 0; i < specialtyIds.length -1; i++) {
-                const currentSpecialtyId = specialtyIds[i];
-                const nextSpecialtyId = specialtyIds[i + 1];
-                 const specialistsA = specialistsBySpecialty.get(currentSpecialtyId);
-                 const specialistsB = specialistsBySpecialty.get(nextSpecialtyId);
-                if (specialistsA && specialistsA.length > 0 && specialistsB && specialistsB.length > 0) {
-                    const nodeA = specialistsA[Math.floor(Math.random() * specialistsA.length)];
-                    const nodeB = specialistsB[Math.floor(Math.random() * specialistsB.length)];
-                    createEdge(nodeA, nodeB, BRIDGE_EDGE_DISTANCE);
-                    connections++;
+        allSpecialists.forEach(specialistData => {
+            if (specialistData.indicatedBy) {
+                const educatorNode = specialistNodesMap.get(specialistData.id);
+                const indicatorNode = specialistNodesMap.get(allSpecialists.find(s => s.name === specialistData.indicatedBy)?.id || '');
+
+                if (educatorNode && indicatorNode) {
+                    createEdge(educatorNode, indicatorNode, BRIDGE_EDGE_DISTANCE, BRIDGE_EDGE_STIFFNESS);
                 }
             }
-            while(connections < maxConnections) {
-                const idx1 = Math.floor(Math.random() * specialtyIds.length);
-                let idx2 = Math.floor(Math.random() * specialtyIds.length);
-                if(idx1 === idx2) continue;
+        });
 
-                const specialistsA = specialistsBySpecialty.get(specialtyIds[idx1]);
-                const specialistsB = specialistsBySpecialty.get(specialtyIds[idx2]);
-
-                 if (specialistsA && specialistsA.length > 0 && specialistsB && specialistsB.length > 0) {
-                    const nodeA = specialistsA[Math.floor(Math.random() * specialistsA.length)];
-                    const nodeB = specialistsB[Math.floor(Math.random() * specialistsB.length)];
-                    createEdge(nodeA, nodeB, BRIDGE_EDGE_DISTANCE * (1 + Math.random() * 0.5));
-                    connections++;
-                }
-            }
-        }
         
-        // --- Auto-framing and Cinematic Tour Setup ---
         const setupCameraAndTour = () => {
-            if (!graphGroupRef.current) return;
-        
-            // Run a few physics steps to let the graph settle a bit before framing
-            for (let i = 0; i < 100; i++) {
-                applyForces();
-                world.step(1 / 60);
-            }
-            nodesRef.current.forEach(node => {
-                node.mesh.position.copy(node.body.position as unknown as THREE.Vector3);
-            });
+             if (!graphGroupRef.current) return;
+            for (let i = 0; i < 200; i++) { world.step(1 / 60); } // Settle physics
 
-            // Calculate bounding box for initial framing
             const box = new THREE.Box3().setFromObject(graphGroupRef.current);
-            const size = new THREE.Vector3();
-            box.getSize(size);
-            const center = new THREE.Vector3();
-            box.getCenter(center);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
         
             const maxDim = Math.max(size.x, size.y, size.z);
             const fov = camera.fov * (Math.PI / 180);
             let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-            cameraZ *= 1.5; // Add padding
+            cameraZ *= isPreview ? 2.5 : 2.4;
         
             camera.position.set(center.x, center.y, center.z + cameraZ);
             controls.target.copy(center);
 
-            // Setup the cinematic tour path
-            const orderedNodes = [...specialtyNodesMap.values()].sort((a, b) => {
-                const angleA = Math.atan2(a.mesh.position.z, a.mesh.position.x);
-                const angleB = Math.atan2(b.mesh.position.z, b.mesh.position.x);
-                return angleA - angleB;
-            });
-
-            if (orderedNodes.length > 1) {
-                const points = orderedNodes.map(node => {
-                    const position = node.mesh.position.clone();
-                    const orbitOffset = new THREE.Vector3(
-                        (Math.random() - 0.5) * 15,
-                        (Math.random() - 0.5) * 10,
-                        (Math.random() - 0.5) * 15
-                    );
-                    return position.add(orbitOffset);
+            if (labelsRef.current.length > 2 && !isPreview) {
+                const points = labelsRef.current.map(label => {
+                    const centroid = new THREE.Vector3();
+                    const members = label.memberIds.map(getNodeById).filter(Boolean) as NetworkNode[];
+                    if (members.length === 0) return new THREE.Vector3();
+                    members.forEach(node => centroid.add(node.mesh.position));
+                    centroid.divideScalar(members.length);
+                    const orbitOffset = new THREE.Vector3().subVectors(centroid, center).normalize().multiplyScalar(15);
+                    return centroid.add(orbitOffset);
                 });
-                tourCurveRef.current = new THREE.CatmullRomCurve3(points, true, 'catmullrom', 0.75);
+                tourCurveRef.current = new THREE.CatmullRomCurve3(points, true, 'catmullrom', 0.5);
             }
             controls.update();
         };
 
         setupCameraAndTour();
 
-
-        // --- Animation Loop ---
         const clock = new THREE.Clock();
         const animate = () => {
             animationFrameIdRef.current = requestAnimationFrame(animate);
-            const deltaTime = clock.getDelta();
+            const deltaTime = Math.min(clock.getDelta(), 0.1);
 
             applyForces();
-            world.step(1 / 60, deltaTime, 3);
+            world.step(1 / 60, deltaTime, 5);
 
             nodesRef.current.forEach(node => {
-                node.mesh.position.copy(node.body.position as unknown as THREE.Vector3);
-                node.mesh.quaternion.copy(node.body.quaternion as unknown as THREE.Quaternion);
+                node.mesh.position.lerp(new THREE.Vector3(node.body.position.x, node.body.position.y, node.body.position.z), 0.5);
+            });
+
+            labelsRef.current.forEach(label => {
+                const memberNodes = label.memberIds.map(getNodeById).filter((n): n is NetworkNode => !!n);
+                if(memberNodes.length > 0) {
+                    const centerOfMass = new THREE.Vector3();
+                    memberNodes.forEach(node => centerOfMass.add(node.mesh.position));
+                    centerOfMass.divideScalar(memberNodes.length);
+                    label.sprite.position.copy(centerOfMass);
+                }
             });
 
             edgesRef.current.forEach(edge => {
                 const constraint = edge.constraint as CANNON.DistanceConstraint;
-                const nodeA = nodesRef.current.find(n => n.body.id === constraint.bodyA.id);
-                const nodeB = nodesRef.current.find(n => n.body.id === constraint.bodyB.id);
+                const nodeA = getNodeById(constraint.bodyA.userData.id);
+                const nodeB = getNodeById(constraint.bodyB.userData.id);
                  if (nodeA && nodeB) {
                     const positions = edge.line.geometry.attributes.position as THREE.BufferAttribute;
                     positions.setXYZ(0, nodeA.mesh.position.x, nodeA.mesh.position.y, nodeA.mesh.position.z);
@@ -412,48 +474,24 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
             });
             
             if (!isUserInteractingRef.current && graphGroupRef.current && !isPreview && tourCurveRef.current) {
-                const tourSpeed = 0.015; // Adjusted speed
-                tourProgressRef.current = (tourProgressRef.current + tourSpeed * deltaTime) % 1;
-        
+                tourProgressRef.current = (tourProgressRef.current + 0.01 * deltaTime) % 1;
                 const cameraPositionOnCurve = tourCurveRef.current.getPointAt(tourProgressRef.current);
-        
-                const box = new THREE.Box3().setFromObject(graphGroupRef.current);
-                const graphCenter = new THREE.Vector3();
-                box.getCenter(graphCenter);
-                const size = new THREE.Vector3();
-                box.getSize(size);
-        
-                const fov = camera.fov * (Math.PI / 180);
-                const fitHeightDistance = size.y / (2 * Math.tan(fov / 2));
-                const fitWidthDistance = size.x / (2 * Math.tan(fov / 2) * camera.aspect);
-                let baseDistance = Math.max(fitHeightDistance, fitWidthDistance);
                 
-                baseDistance *= 1.2; // Adjusted padding
-                baseDistance = Math.max(baseDistance, controls.minDistance + 10);
-        
-                // Implement subtle "pulsing" zoom
-                const pulseSpeed = 0.2; // How fast the zoom pulses
-                const pulseAmplitude = 0.15; // How much it zooms in (15%)
-                const pulseFactor = 1.0 - (Math.sin(clock.getElapsedTime() * pulseSpeed) * 0.5 + 0.5) * pulseAmplitude;
-                const finalDistance = baseDistance * pulseFactor;
-        
+                const box = new THREE.Box3().setFromObject(graphGroupRef.current);
+                const graphCenter = box.getCenter(new THREE.Vector3());
+                
+                const distance = graphCenter.distanceTo(camera.position);
                 const direction = new THREE.Vector3().subVectors(cameraPositionOnCurve, graphCenter).normalize();
-                if (direction.lengthSq() === 0) {
-                    direction.set(0, 0.3, 1).normalize();
-                }
-                const newCameraPos = new THREE.Vector3().copy(graphCenter).addScaledVector(direction, finalDistance);
-        
-                const smoothingFactor = 0.02;
-                camera.position.lerp(newCameraPos, smoothingFactor);
-                controls.target.lerp(graphCenter, smoothingFactor);
+                const newCameraPos = new THREE.Vector3().copy(graphCenter).addScaledVector(direction, distance);
+                
+                camera.position.lerp(newCameraPos, 0.02);
+                controls.target.lerp(graphCenter, 0.02);
             }
-
 
             controls.update();
             renderer.render(scene, camera);
         };
         
-        // --- Event Handlers ---
         const handleResize = () => {
             if (mountRef.current && rendererRef.current && cameraRef.current) {
                 const { clientWidth, clientHeight } = mountRef.current;
@@ -464,7 +502,7 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
         };
 
         const handleClick = (event: MouseEvent) => {
-            if (!mountRef.current || !cameraRef.current || !graphGroupRef.current || isPreview) return;
+             if (!mountRef.current || !cameraRef.current || !graphGroupRef.current || isPreview) return;
             
             const rect = mountRef.current.getBoundingClientRect();
             mouseRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -475,61 +513,25 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
 
             for (const intersect of intersects) {
                 let targetObject = intersect.object;
-                
-                if (targetObject.userData.isLabel && targetObject.parent instanceof THREE.Mesh) {
+                 if (targetObject.userData.isLabel && targetObject.parent) {
                     targetObject = targetObject.parent;
                 }
 
-                if (targetObject instanceof THREE.Mesh && targetObject.userData.isSpecialty) {
-                    const { userData } = targetObject;
-                    if (userData.data && userData.data.content) {
-                        const material = targetObject.material as THREE.MeshPhongMaterial;
-                        if(material.opacity > 0.5) { 
-                           onSpecialtyClick(userData.data.content);
-                           return; 
+                if (targetObject instanceof THREE.Sprite && targetObject.userData.isLabel) {
+                    const labelId = labelsRef.current.find(l => l.sprite === targetObject)?.id;
+                    if (labelId) {
+                        const specialty = SPECIALTY_DATA.find(s => s.id === labelId);
+                        if (specialty && specialty.content && targetObject.material.opacity > 0.5) {
+                            onSpecialtyClick(specialty.content);
+                            return;
                         }
                     }
                 }
             }
         };
 
-        const onInteractionStart = () => {
-            isUserInteractingRef.current = true;
-            if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
-        };
-
-        const onInteractionEnd = () => {
-            if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
-            idleTimeoutRef.current = setTimeout(() => {
-                if (!graphGroupRef.current) return;
-                isUserInteractingRef.current = false;
-                
-                const invertedMatrix = new THREE.Matrix4().copy(graphGroupRef.current.matrixWorld).invert();
-                const localCameraPos = camera.position.clone().applyMatrix4(invertedMatrix);
-
-                if (tourCurveRef.current) {
-                    let closestProgress = 0;
-                    let minDistance = Infinity;
-                    const divisions = 200;
-                    for(let i = 0; i < divisions; i++) {
-                        const progress = i / divisions;
-                        const pointOnCurve = tourCurveRef.current.getPointAt(progress);
-                        const distance = localCameraPos.distanceTo(pointOnCurve);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            closestProgress = progress;
-                        }
-                    }
-                    tourProgressRef.current = closestProgress;
-
-                    const tempTarget = new THREE.Vector3();
-                    tempTarget.copy(controls.target);
-
-                    const localTargetPos = tempTarget.applyMatrix4(invertedMatrix);
-                }
-
-            }, 5000); 
-        };
+        const onInteractionStart = () => { isUserInteractingRef.current = true; if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); };
+        const onInteractionEnd = () => { if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current); idleTimeoutRef.current = setTimeout(() => { isUserInteractingRef.current = false; }, 5000); };
 
         controls.addEventListener('start', onInteractionStart);
         controls.addEventListener('end', onInteractionEnd);
@@ -538,7 +540,6 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
 
         animate();
 
-        // --- Cleanup ---
         return () => {
             controls.removeEventListener('start', onInteractionStart);
             controls.removeEventListener('end', onInteractionEnd);
@@ -548,25 +549,25 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
             if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current);
             
             nodesRef.current.forEach(node => {
-                if (graphGroupRef.current) graphGroupRef.current.remove(node.mesh);
+                graphGroupRef.current?.remove(node.mesh);
                 node.mesh.traverse(child => {
                     if (child instanceof THREE.Mesh || child instanceof THREE.Sprite) {
                         child.geometry?.dispose();
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach(m => {
-                                m.map?.dispose();
-                                m.dispose()
-                            });
-                        } else if (child.material) {
-                            (child.material as any).map?.dispose();
-                            (child.material as THREE.Material).dispose();
-                        }
+                        (child.material as any)?.map?.dispose();
+                        (child.material as any)?.dispose();
                     }
                 });
                 world.removeBody(node.body);
             });
+
+            labelsRef.current.forEach(label => {
+                 graphGroupRef.current?.remove(label.sprite);
+                 label.sprite.material.map?.dispose();
+                 label.sprite.material.dispose();
+            });
+
             edgesRef.current.forEach(edge => {
-                if (graphGroupRef.current) graphGroupRef.current.remove(edge.line);
+                graphGroupRef.current?.remove(edge.line);
                 edge.line.geometry.dispose();
                 (edge.line.material as THREE.Material).dispose();
                 world.removeConstraint(edge.constraint);
@@ -579,8 +580,9 @@ const SpecialistNetworkGraph: React.FC<SpecialistNetworkGraphProps> = ({ onSpeci
             
             nodesRef.current = [];
             edgesRef.current = [];
+            labelsRef.current = [];
         };
-    }, [onSpecialtyClick, isPreview]);
+    }, [onSpecialtyClick, isPreview, allSpecialists, buildAdjacencyList, getNodeById]);
 
     return <div ref={mountRef} className="w-full h-full" />;
 };
